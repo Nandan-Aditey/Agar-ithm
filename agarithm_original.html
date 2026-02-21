@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>AGAR-RITHM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white min-h-screen flex">
+
+  <div class="flex-1 flex items-center justify-center p-6">
+    <div class="relative">
+      <canvas id="arena"
+        width="900"
+        height="600"
+        class="rounded-xl shadow-2xl border border-gray-700 bg-black">
+      </canvas>
+
+      <div class="absolute top-3 left-3 text-xs text-gray-400">
+        Arena
+      </div>
+    </div>
+  </div>
+
+  <div class="w-96 bg-white/5 backdrop-blur-lg border-l border-gray-700
+              p-6 flex flex-col gap-6 shadow-2xl">
+
+    <div class="text-center">
+      <h1 class="text-2xl font-bold tracking-wide">
+        Agar-ithm
+      </h1>
+      <p class="text-xs text-gray-400">
+        Simulator
+      </p>
+    </div>
+
+    <div id="speciesControls"
+         class="space-y-4 overflow-y-auto max-h-[420px] pr-2">
+    </div>
+
+    <div class="space-y-3">
+      <button id="startBtn"
+        class="w-full bg-green-600 hover:bg-green-500
+               transition-all duration-200
+               py-2 rounded-lg font-semibold shadow-lg">
+        Start Simulation
+      </button>
+    </div>
+
+    <div>
+      <h2 class="text-sm font-semibold text-gray-400 mb-2">
+        Population
+      </h2>
+      <div id="populationPanel" class="space-y-3"></div>
+    </div>
+
+  </div>
+
+<script>
+
+
+const canvas = document.getElementById("arena");
+const ctx = canvas.getContext("2d");
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+const RADIUS = 4;
+const SIM_TIME = 30000;
+const INITIAL_CELLS = 25;
+const POINT_BUDGET = 100;
+
+let running = false;
+let startTime;
+
+
+
+class Species {
+  constructor(name, color) {
+    this.name = name;
+    this.color = color;
+
+    this.strength = 25;
+    this.health = 25;
+    this.reproduction = 25;
+    this.agility = 25;
+  }
+
+  normalize() {
+    const total =
+      this.strength +
+      this.health +
+      this.reproduction +
+      this.agility;
+
+    const scale = POINT_BUDGET / total;
+
+    this.strength *= scale;
+    this.health *= scale;
+    this.reproduction *= scale;
+    this.agility *= scale;
+  }
+}
+
+const speciesList = [
+  new Species("Blue", "#3B82F6"),
+  new Species("Red", "#EF4444"),
+  new Species("Green", "#22C55E"),
+  new Species("Purple", "#A855F7"),
+  new Species("Yellow", "#FACC15")
+];
+
+
+class Cell {
+  constructor(x, y, species) {
+    this.x = x;
+    this.y = y;
+    this.species = species;
+    this.health = species.health / 5;
+
+    const angle = Math.random() * Math.PI * 2;
+    const speed = species.agility / 20;
+
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+
+    this.decisionTimer = 0;
+    this.fightMode = true;
+  }
+
+  move(cells) {
+
+    const speed = this.species.agility / 20;
+    const steerStrength = 0.08;
+    const friction = 0.98;
+
+    let nearest = null;
+    let minDist = Infinity;
+
+    for (let c of cells) {
+      if (c !== this && c.species !== this.species) {
+        const d = Math.hypot(this.x - c.x, this.y - c.y);
+        if (d < minDist) {
+          minDist = d;
+          nearest = c;
+        }
+      }
+    }
+
+    this.decisionTimer--;
+
+    if (nearest && this.decisionTimer <= 0) {
+
+      const myScore =
+        this.species.strength * 0.7 +
+        this.species.agility * 0.3;
+
+      const enemyScore =
+        nearest.species.strength * 0.7 +
+        nearest.species.agility * 0.3;
+
+      const advantage = myScore - enemyScore;
+
+      const scale = 20;
+      const pFight = 1 / (1 + Math.exp(-advantage / scale));
+
+      this.fightMode = Math.random() < pFight;
+
+      this.decisionTimer = 20 + Math.random() * 30;
+    }
+
+    if (nearest) {
+
+      const angle = this.fightMode
+        ? Math.atan2(nearest.y - this.y,
+                     nearest.x - this.x)
+        : Math.atan2(this.y - nearest.y,
+                     this.x - nearest.x);
+
+      const targetVx = Math.cos(angle) * speed;
+      const targetVy = Math.sin(angle) * speed;
+
+      this.vx += (targetVx - this.vx) * steerStrength;
+      this.vy += (targetVy - this.vy) * steerStrength;
+    }
+
+    this.vx += (Math.random() - 0.5) * 0.02;
+    this.vy += (Math.random() - 0.5) * 0.02;
+
+    this.vx *= friction;
+    this.vy *= friction;
+
+    const currentSpeed = Math.hypot(this.vx, this.vy);
+    if (currentSpeed > speed) {
+      this.vx = (this.vx / currentSpeed) * speed;
+      this.vy = (this.vy / currentSpeed) * speed;
+    }
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.x - RADIUS <= 0) {
+      this.x = RADIUS;
+      this.vx = Math.abs(this.vx);
+    }
+
+    if (this.x + RADIUS >= WIDTH) {
+      this.x = WIDTH - RADIUS;
+      this.vx = -Math.abs(this.vx);
+    }
+
+    if (this.y - RADIUS <= 0) {
+      this.y = RADIUS;
+      this.vy = Math.abs(this.vy);
+    }
+
+    if (this.y + RADIUS >= HEIGHT) {
+      this.y = HEIGHT - RADIUS;
+      this.vy = -Math.abs(this.vy);
+    }
+  }
+
+  draw() {
+    ctx.fillStyle = this.species.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+
+
+let cells = [];
+
+
+const controlDiv = document.getElementById("speciesControls");
+
+speciesList.forEach((sp) => {
+
+  const wrapper = document.createElement("div");
+  wrapper.className =
+    "bg-gray-800/70 border border-gray-700 rounded-xl p-4 shadow-md";
+
+  wrapper.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-semibold"
+          style="color:${sp.color}">
+        ${sp.name}
+      </h2>
+    </div>
+
+    ${createSlider(sp, "strength")}
+    ${createSlider(sp, "health")}
+    ${createSlider(sp, "reproduction")}
+    ${createSlider(sp, "agility")}
+  `;
+
+  controlDiv.appendChild(wrapper);
+});
+
+
+function createSlider(sp, stat) {
+  return `
+    <div class="mb-3">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="capitalize">${stat}</span>
+        <span id="${sp.name}_${stat}">
+          ${Math.round(sp[stat])}
+        </span>
+      </div>
+
+      <input type="range"
+        min="0" max="100"
+        value="${sp[stat]}"
+        class="w-full accent-white"
+        oninput="updateStat('${sp.name}','${stat}',this.value)">
+    </div>
+  `;
+}
+
+window.updateStat = function(name, stat, value) {
+
+  const sp = speciesList.find(s => s.name === name);
+
+  value = Number(value);
+  if (value < 0) value = 0;
+
+  const otherStats = ["strength","health","reproduction","agility"]
+    .filter(s => s !== stat);
+
+  const currentTotal =
+    sp.strength + sp.health + sp.reproduction + sp.agility;
+
+  const currentValue = sp[stat];
+  const delta = value - currentValue;
+
+  if (delta > 0) {
+
+    const available =
+      otherStats.reduce((sum, s) => sum + sp[s], 0);
+
+    if (available <= 0) return;
+
+    const scale = Math.min(delta, available) / available;
+
+    otherStats.forEach(s => {
+      sp[s] -= sp[s] * scale;
+      if (sp[s] < 0) sp[s] = 0;
+    });
+  }
+
+  sp[stat] = value;
+
+  const newTotal =
+    sp.strength + sp.health + sp.reproduction + sp.agility;
+
+  const correction = POINT_BUDGET - newTotal;
+
+  if (Math.abs(correction) > 0.001) {
+    sp[otherStats[0]] += correction;
+  }
+
+  ["strength","health","reproduction","agility"]
+    .forEach(s => {
+      const el = document.getElementById(`${sp.name}_${s}`);
+      if (el) el.innerText = Math.round(sp[s]);
+    });
+};
+
+
+
+
+document.getElementById("startBtn")
+  .onclick = () => startSimulation();
+
+  
+function startSimulation() {
+
+  cells = [];
+  running = true;
+  startTime = Date.now();
+
+  const clusterRadius = 60;
+  const margin = 80;
+
+  const spawnCenters = [];
+
+  for (let i = 0; i < speciesList.length; i++) {
+
+    let valid = false;
+    let x, y;
+
+    while (!valid) {
+
+      x = margin + Math.random() * (WIDTH - 2 * margin);
+      y = margin + Math.random() * (HEIGHT - 2 * margin);
+
+      valid = true;
+
+      for (let c of spawnCenters) {
+        const dist = Math.hypot(x - c.x, y - c.y);
+        if (dist < clusterRadius * 2) {
+          valid = false;
+          break;
+        }
+      }
+    }
+
+    spawnCenters.push({ x, y });
+  }
+
+  speciesList.forEach((sp, i) => {
+
+    const center = spawnCenters[i];
+
+    for (let j = 0; j < INITIAL_CELLS; j++) {
+
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * clusterRadius;
+
+      const x = center.x + Math.cos(angle) * radius;
+      const y = center.y + Math.sin(angle) * radius;
+
+      cells.push(new Cell(x, y, sp));
+    }
+  });
+}
+
+
+function mutateRandom() {
+  const sp =
+    speciesList[Math.floor(Math.random()*speciesList.length)];
+
+  const stats =
+    ["strength","health","reproduction","agility"];
+
+  const attr =
+    stats[Math.floor(Math.random()*stats.length)];
+
+  sp[attr] += Math.random()*20 - 10;
+  if (sp[attr] < 0) sp[attr] = 0;
+
+  sp.normalize();
+}
+
+
+function update() {
+
+  ctx.clearRect(0,0,WIDTH,HEIGHT);
+
+  if (!running) return requestAnimationFrame(update);
+
+  if (Date.now() - startTime > SIM_TIME) {
+    running = false;
+  }
+
+  cells.forEach(c => c.move(cells));
+
+  for (let i=0;i<cells.length;i++) {
+    for (let j=i+1;j<cells.length;j++) {
+
+      const a = cells[i];
+      const b = cells[j];
+
+      if (a.species !== b.species &&
+          Math.hypot(a.x-b.x,a.y-b.y) < RADIUS*2) {
+
+        if (Math.random() <
+            a.species.strength/100)
+          b.health--;
+
+        if (Math.random() <
+            b.species.strength/100)
+          a.health--;
+      }
+    }
+  }
+
+  cells = cells.filter(c => c.health > 0);
+
+  const newCells = [];
+  cells.forEach(c => {
+    if (Math.random() <
+        c.species.reproduction/5000) {
+      newCells.push(
+        new Cell(c.x,c.y,c.species)
+      );
+    }
+  });
+
+  cells.push(...newCells);
+
+  cells.forEach(c => c.draw());
+
+  drawPopulation();
+
+  requestAnimationFrame(update);
+}
+
+function drawPopulation() {
+  const panel = document.getElementById("populationPanel");
+  panel.innerHTML = "";
+
+  speciesList.forEach(sp => {
+
+    const count =
+      cells.filter(c => c.species === sp).length;
+
+    const container = document.createElement("div");
+
+    container.innerHTML = `
+      <div class="flex justify-between text-xs mb-1">
+        <span style="color:${sp.color}">
+          ${sp.name}
+        </span>
+        <span>${count}</span>
+      </div>
+
+      <div class="w-full bg-gray-700 rounded-full h-2">
+        <div class="h-2 rounded-full"
+          style="
+            width:${Math.min(count*2,100)}%;
+            background:${sp.color};
+            transition:width 0.2s;
+          ">
+        </div>
+      </div>
+    `;
+
+    panel.appendChild(container);
+  });
+}
+
+
+update();
+
+</script>
+</body>
+</html>
