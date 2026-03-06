@@ -15,15 +15,15 @@ canvas{image-rendering:pixelated;}
 
 <body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen p-8">
 
-<div class="max-w-6xl mx-auto">
+<div class="max-w-7xl mx-auto">
 
 <h1 class="text-4xl font-bold mb-2 text-center">Cell Strategy Evolution</h1>
 
 <p class="text-center text-slate-300 mb-8">
-Choose a fixed strategy. Computer cells evolve against it.
+Choose your strategy. Computer cells evolve to compete with it.
 </p>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
 <div class="space-y-6">
 
@@ -49,7 +49,7 @@ Start Simulation
 
 <div class="bg-slate-800/70 backdrop-blur p-4 rounded-xl shadow">
 
-<canvas id="simCanvas" width="640" height="420"></canvas>
+<canvas id="simCanvas" width="1200" height="700"></canvas>
 
 <div class="flex justify-between mt-3 text-sm text-slate-300">
 <span id="genText">Generation 1</span>
@@ -84,11 +84,11 @@ class="bg-slate-700 rounded px-2 py-1 text-sm">
 
 <script>
 
-const WIDTH=640
-const HEIGHT=420
+const WIDTH=1200
+const HEIGHT=700
 
 const POP=30
-const FOOD_RATE=0.35
+const FOOD_RATE=0.7
 const GENERATION_TIME=8000
 
 let canvas=document.getElementById("simCanvas")
@@ -125,15 +125,15 @@ this.y=y
 
 this.strength=strength
 
-this.speed=Math.pow((100-strength)/100,1.5)*3
+this.speed=1+(100-strength)/20
 
-this.radius=3+strength/18
+this.radius=4
 
 this.color=color
 
 this.hunger=0
 
-this.maxHunger=260+(100-strength)*1.5
+this.maxHunger=200+(100-strength)*2
 
 }
 
@@ -172,7 +172,16 @@ target=f
 
 }
 
-if(target) this.move(target.x,target.y)
+if(target){
+
+this.move(target.x,target.y)
+
+}else{
+
+this.x+=(Math.random()-0.5)*this.speed*2
+this.y+=(Math.random()-0.5)*this.speed*2
+
+}
 
 }
 
@@ -229,7 +238,7 @@ for(let i=0;i<POP;i++){
 
 let parent=dist[Math.floor(Math.random()*dist.length)]
 
-let s=parent+(Math.random()-0.5)*8
+let s=parent+(Math.random()-0.5)*12
 
 s=Math.max(0,Math.min(100,s))
 
@@ -390,7 +399,7 @@ function updateChart(){
 
 let ctxChart=document.getElementById("chart")
 
-if(chart) chart.destroy()
+if(chart)chart.destroy()
 
 const axisColor="#e2e8f0"
 const gridColor="rgba(148,163,184,0.25)"
@@ -426,18 +435,12 @@ borderWidth:2
 },
 
 options:{
-
 animation:{duration:800},
-
-plugins:{
-legend:{labels:{color:axisColor,font:{size:14}}}
-},
-
+plugins:{legend:{labels:{color:axisColor}}},
 scales:{
 x:{ticks:{color:axisColor},grid:{color:gridColor}},
 y:{beginAtZero:true,max:POP,ticks:{color:axisColor},grid:{color:gridColor}}
 }
-
 }
 
 })
@@ -451,14 +454,11 @@ type:"line",
 data:{
 labels:history.map(h=>h.gen),
 datasets:[{
-
 label:"Average Computer Strength",
-
 data:history.map(h=>{
 if(h.dist.length===0)return 0
 return h.dist.reduce((a,b)=>a+b,0)/h.dist.length
 }),
-
 borderColor:"#38bdf8",
 backgroundColor:"rgba(56,189,248,0.3)",
 pointBackgroundColor:"#7dd3fc",
@@ -466,24 +466,16 @@ pointRadius:4,
 borderWidth:3,
 tension:0.35,
 fill:true
-
 }]
-
 },
 
 options:{
-
 animation:{duration:900},
-
-plugins:{
-legend:{labels:{color:axisColor,font:{size:14}}}
-},
-
+plugins:{legend:{labels:{color:axisColor}}},
 scales:{
 x:{ticks:{color:axisColor},grid:{color:gridColor}},
 y:{ticks:{color:axisColor},grid:{color:gridColor}}
 }
-
 }
 
 })
@@ -514,5 +506,6 @@ updateChart()
 }
 
 </script>
+
 </body>
 </html>
