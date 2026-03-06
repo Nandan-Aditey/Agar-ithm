@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strength vs Speed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #374151;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center py-10 font-sans selection:bg-blue-500/30">
+
+    <div class="max-w-4xl w-full px-4">
+        
+        <h1 class="text-4xl font-extrabold text-center mb-8 text-white tracking-tight">
+            Survival of the Fittest
+        </h1>
+
+        <div class="bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl mb-8 flex flex-col md:flex-row gap-8 items-center justify-between">
+            
+            <div class="w-full md:w-5/12 space-y-4">
+                <div class="flex justify-between items-center text-sm font-semibold tracking-wide uppercase text-gray-400">
+                    <span>Your Strategy</span>
+                    <span>100 Pts Total</span>
+                </div>
+                
+                <div class="flex justify-between items-end mb-2">
+                    <div class="flex flex-col">
+                        <span class="text-blue-400 font-bold text-lg">Strength</span>
+                        <span class="text-3xl font-black text-white" id="brawnVal">50</span>
+                    </div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-green-400 font-bold text-lg">Speed</span>
+                        <span class="text-3xl font-black text-white" id="speedVal">50</span>
+                    </div>
+                </div>
+                <input type="range" id="brawnSlider" min="0" max="100" value="50" class="w-full">
+            </div>
+            
+            <div class="w-full md:w-4/12 flex flex-col items-center justify-center bg-gray-900/50 p-4 rounded-xl border border-gray-700/50">
+                <div id="timerDisplay" class="text-3xl font-mono font-bold text-yellow-400 mb-2 drop-shadow-md">00:30.0</div>
+                <div class="flex gap-4 text-lg font-bold w-full justify-center">
+                    <span class="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-md border border-blue-500/30">You: <span id="playerPop">10</span></span>
+                    <span class="bg-red-500/20 text-red-400 px-3 py-1 rounded-md border border-red-500/30">Computer: <span id="compPop">10</span></span>
+                </div>
+                <div id="compStrategyDisplay" class="text-xs font-medium text-gray-400 mt-3 uppercase tracking-wider">
+                    Awaiting Simulation...
+                </div>
+            </div>
+
+            <div class="w-full md:w-3/12 flex justify-center md:justify-end">
+                <button id="startBtn" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-blue-500/25 transition-all duration-200 transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-blue-500/50 active:translate-y-0">
+                    Start Simulation
+                </button>
+            </div>
+        </div>
+
+        <div class="relative bg-gray-800 p-3 rounded-2xl shadow-2xl border border-gray-700 mx-auto w-fit">
+            <canvas id="gameCanvas" width="800" height="600" class="bg-slate-900 rounded-xl cursor-crosshair shadow-inner"></canvas>
+            
+            <div id="gameOverOverlay" class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center hidden opacity-0 transition-opacity duration-300">
+                <h2 id="gameOverTitle" class="text-5xl font-black mb-4 text-white drop-shadow-lg">Game Over</h2>
+                <p id="gameOverSub" class="text-xl text-gray-300 mb-6">Adjust your strategy and try again.</p>
+                <button id="playAgainBtn" class="bg-white text-gray-900 hover:bg-gray-200 font-bold py-3 px-8 rounded-full shadow-lg transition-colors">
+                    Play Again
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const brawnSlider = document.getElementById('brawnSlider');
+    const brawnVal = document.getElementById('brawnVal');
+    const speedVal = document.getElementById('speedVal');
+    const startBtn = document.getElementById('startBtn');
+    
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const gameOverTitle = document.getElementById('gameOverTitle');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    
+    const COLOR_PLAYER = '#3b82f6';
+    const COLOR_COMP = '#ef4444';
+    const COLOR_FOOD = '#4ade80';
+
+    let isPlaying = false;
+    let cells = [];
+    let foods = [];
+    let timeRemaining = 30;
+    let lastTime = 0;
+    let foodTimer = 0;
+    let animationFrameId;
+
+    const STARVATION_TIME = 5000;
+    const MAX_FOOD = 30;
+
+    brawnSlider.addEventListener('input', (e) => {
+        const brawn = parseInt(e.target.value);
+        brawnVal.textContent = brawn;
+        speedVal.textContent = 100 - brawn;
+    });
+
+    playAgainBtn.addEventListener('click', () => {
+        gameOverOverlay.classList.add('hidden');
+        gameOverOverlay.classList.remove('opacity-100');
+        initGame();
+    });
+
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    class Food {
+        constructor() {
+            this.x = Math.random() * canvas.width;
+            this.y = Math.random() * canvas.height;
+            this.radius = 4;
+        }
+        draw() {
+            ctx.fillStyle = COLOR_FOOD;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = COLOR_FOOD;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    class Cell {
+        constructor(x, y, team, brawn, speed) {
+            this.x = x;
+            this.y = y;
+            this.team = team;
+            this.brawn = brawn;
+            this.speed = speed;
+            this.radius = 6 + (brawn / 20);
+            this.maxSpeed = 1 + (speed / 20);
+            this.lastEaten = Date.now();
+            this.vx = 0;
+            this.vy = 0;
+            this.dead = false;
+        }
+
+        update() {
+            if (Date.now() - this.lastEaten > STARVATION_TIME) {
+                this.dead = true;
+                return;
+            }
+
+            let minFoodDist = Infinity;
+            let bestFood = null;
+            let minEnemyDist = Infinity;
+            let closestEnemy = null;
+
+            foods.forEach(f => {
+                let d = dist(this, f);
+                if (d < minFoodDist) { minFoodDist = d; bestFood = f; }
+            });
+
+            cells.forEach(c => {
+                if (c.team !== this.team && !c.dead) {
+                    let d = dist(this, c);
+                    if (d < minEnemyDist) { minEnemyDist = d; closestEnemy = c; }
+                }
+            });
+
+            let forceX = 0;
+            let forceY = 0;
+
+            // Food Attraction
+            if (bestFood) {
+                let dx = bestFood.x - this.x;
+                let dy = bestFood.y - this.y;
+                forceX += (dx / minFoodDist) * 1.0;
+                forceY += (dy / minFoodDist) * 1.0;
+            }
+
+            // Enemy Interaction
+            if (closestEnemy) {
+                let dx = closestEnemy.x - this.x;
+                let dy = closestEnemy.y - this.y;
+
+                if (closestEnemy.brawn > this.brawn && minEnemyDist < 150) {
+                    // Stronger push away the closer they get (Panic multiplier)
+                    let panic = Math.max(0, 150 - minEnemyDist) / 50;
+                    forceX -= (dx / minEnemyDist) * panic;
+                    forceY -= (dy / minEnemyDist) * panic;
+                }
+                else if (this.brawn >= closestEnemy.brawn && minEnemyDist < 100) {
+                    // If we are stronger and they are close, abandon food and attack
+                    forceX += (dx / minEnemyDist) * 1.5;
+                    forceY += (dy / minEnemyDist) * 1.5;
+                }
+            }
+
+            // Wall Avoidance (Don't get cornered)
+            const margin = 10;
+            const wallForce = 2.0;
+            if (this.x < margin) forceX += wallForce;
+            if (this.x > canvas.width - margin) forceX -= wallForce;
+            if (this.y < margin) forceY += wallForce;
+            if (this.y > canvas.height - margin) forceY -= wallForce;
+
+            // Apply Forces
+            let mag = Math.hypot(forceX, forceY);
+            if (mag > 0) {
+                this.vx = (forceX / mag) * this.maxSpeed;
+                this.vy = (forceY / mag) * this.maxSpeed;
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Hard bounds just in case
+            if (this.x < 0) this.x = 0;
+            if (this.x > canvas.width) this.x = canvas.width;
+            if (this.y < 0) this.y = 0;
+            if (this.y > canvas.height) this.y = canvas.height;
+
+            // Eat Food
+            for (let i = foods.length - 1; i >= 0; i--) {
+                if (dist(this, foods[i]) < this.radius + foods[i].radius) {
+                    foods.splice(i, 1);
+                    this.lastEaten = Date.now();
+                }
+            }
+        }
+
+        draw() {
+            let hungerRatio = (Date.now() - this.lastEaten) / STARVATION_TIME;
+            ctx.globalAlpha = Math.max(0.1, 1 - (hungerRatio * 0.8));
+
+            ctx.fillStyle = this.team === 'player' ? COLOR_PLAYER : COLOR_COMP;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#ffffff22';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    function getComputerStrategy(playerBrawn) {
+        let playerSpeed = 100 - playerBrawn;
+        let bestUtility = -Infinity;
+        let optimalBrawn = 0;
+
+        for (let testBrawn = 0; testBrawn <= 100; testBrawn++) {
+            let testSpeed = 100 - testBrawn;
+            let utility = 0;
+
+            // Combat Supremacy
+            if (testBrawn > playerBrawn) {
+                utility += 50; 
+            } else if (testBrawn < playerBrawn) {
+                utility -= 50; 
+            }
+
+            //  Foraging Efficiency (Speed difference)
+            let speedAdvantage = testSpeed - playerSpeed;
+            utility += (speedAdvantage * 2.5);
+
+            //Kiting Penalty
+            if (testBrawn > playerBrawn && testSpeed < playerSpeed) {
+                let speedDeficit = playerSpeed - testSpeed;
+                utility -= (speedDeficit * 3); 
+            }
+
+            if (utility > bestUtility) {
+                bestUtility = utility;
+                optimalBrawn = testBrawn;
+            }
+        }
+
+        return { brawn: optimalBrawn, speed: 100 - optimalBrawn };
+    }
+
+    function initGame() {
+        gameOverOverlay.classList.add('hidden');
+        gameOverOverlay.classList.remove('opacity-100');
+
+        const playerBrawn = parseInt(brawnSlider.value);
+        const playerSpeed = 100 - playerBrawn;
+        
+        const compStrat = getComputerStrategy(playerBrawn);
+        document.getElementById('compStrategyDisplay').innerHTML =
+            `Computer counter: <span class="text-white font-bold">Brawn ${compStrat.brawn} / Speed ${compStrat.speed}</span>`;
+
+        cells = [];
+        foods = [];
+        timeRemaining = 30.0;
+        
+        for(let i=0; i<10; i++) {
+            cells.push(new Cell(Math.random() * 200, Math.random() * canvas.height, 'player', playerBrawn, playerSpeed));
+        }
+        for(let i=0; i<10; i++) {
+            cells.push(new Cell(canvas.width - 200 + Math.random() * 200, Math.random() * canvas.height, 'comp', compStrat.brawn, compStrat.speed));
+        }
+        for(let i=0; i<20; i++) foods.push(new Food());
+
+        isPlaying = true;
+        lastTime = performance.now();
+        startBtn.innerText = "Restart Simulation";
+        
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        gameLoop();
+    }
+
+    function handleCollisions() {
+        for (let i = 0; i < cells.length; i++) {
+            for (let j = i + 1; j < cells.length; j++) {
+                let a = cells[i];
+                let b = cells[j];
+                
+                if (a.dead || b.dead || a.team === b.team) continue;
+
+                if (dist(a, b) < a.radius + b.radius) {
+                    if (a.brawn > b.brawn) {
+                        b.dead = true;
+                        a.lastEaten = Date.now();
+                    } else if (b.brawn > a.brawn) {
+                        a.dead = true;
+                        b.lastEaten = Date.now();
+                    } else {
+                        if (Math.random() > 0.5) { b.dead = true; a.lastEaten = Date.now(); }
+                        else { a.dead = true; b.lastEaten = Date.now(); }
+                    }
+                }
+            }
+        }
+    }
+
+    function showGameOver(playerAlive, compAlive) {
+        gameOverOverlay.classList.remove('hidden');
+        
+        setTimeout(() => {
+            gameOverOverlay.classList.add('opacity-100');
+        }, 10);
+
+        if (playerAlive > compAlive) {
+            gameOverTitle.textContent = "You Win!";
+            gameOverTitle.className = "text-5xl font-black mb-4 text-blue-400 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]";
+        } else if (compAlive > playerAlive) {
+            gameOverTitle.textContent = "Computer Wins!";
+            gameOverTitle.className = "text-5xl font-black mb-4 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]";
+        } else {
+            gameOverTitle.textContent = "It's a Tie!";
+            gameOverTitle.className = "text-5xl font-black mb-4 text-gray-300 drop-shadow-lg";
+        }
+    }
+
+    function gameLoop(currentTime = performance.now()) {
+        if (!isPlaying) return;
+
+        const deltaTime = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+
+        timeRemaining -= deltaTime;
+        if (timeRemaining <= 0) {
+            timeRemaining = 0;
+            isPlaying = false;
+        }
+        
+        let displayTime = Math.max(0, timeRemaining).toFixed(1);
+        displayTime = displayTime.padStart(4, '0');
+        document.getElementById('timerDisplay').innerText = `00:${displayTime}`;
+
+        if (timeRemaining <= 5) {
+            document.getElementById('timerDisplay').classList.replace('text-yellow-400', 'text-red-500');
+            document.getElementById('timerDisplay').classList.add('animate-pulse');
+        } else {
+            document.getElementById('timerDisplay').classList.replace('text-red-500', 'text-yellow-400');
+            document.getElementById('timerDisplay').classList.remove('animate-pulse');
+        }
+
+        foodTimer += deltaTime;
+        if (foodTimer > 0.5 && foods.length < MAX_FOOD) {
+            foods.push(new Food());
+            foodTimer = 0;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        foods.forEach(f => f.draw());
+
+        handleCollisions();
+
+        let playerAlive = 0;
+        let compAlive = 0;
+
+        cells.forEach(c => {
+            if (!c.dead) {
+                c.update();
+                c.draw();
+                if (c.team === 'player') playerAlive++;
+                else compAlive++;
+            }
+        });
+
+        document.getElementById('playerPop').innerText = playerAlive;
+        document.getElementById('compPop').innerText = compAlive;
+
+        if (playerAlive === 0 || compAlive === 0) {
+            isPlaying = false;
+        }
+
+        if (isPlaying) {
+            animationFrameId = requestAnimationFrame(gameLoop);
+        } else {
+            showGameOver(playerAlive, compAlive);
+        }
+    }
+
+    startBtn.addEventListener('click', initGame);
+    
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#334155';
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText("Select your strategy and click Start", canvas.width/2, canvas.height/2);
+
+</script>
+</body>
+</html>
