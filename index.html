@@ -9,23 +9,18 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-canvas{
-image-rendering:pixelated;
-}
+canvas{image-rendering:pixelated;}
 </style>
-
 </head>
 
 <body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen p-8">
 
 <div class="max-w-6xl mx-auto">
 
-<h1 class="text-4xl font-bold mb-2 text-center">
-Cell Strategy Evolution
-</h1>
+<h1 class="text-4xl font-bold mb-2 text-center">Cell Strategy Evolution</h1>
 
 <p class="text-center text-slate-300 mb-8">
-Decide your cell's strategy and watch the computer cells evolve to beat you, you will learn something out of it though.
+Choose a fixed strategy. Computer cells evolve against it.
 </p>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -66,7 +61,6 @@ Start Simulation
 
 </div>
 
-
 <div class="bg-slate-800/70 backdrop-blur p-6 rounded-xl shadow-lg">
 
 <div class="flex justify-between mb-4">
@@ -90,11 +84,11 @@ class="bg-slate-700 rounded px-2 py-1 text-sm">
 
 <script>
 
-const WIDTH = 640
-const HEIGHT = 420
+const WIDTH=640
+const HEIGHT=420
 
-const POP = 30
-const FOOD_RATE = 0.35
+const POP=30
+const FOOD_RATE=0.35
 const GENERATION_TIME=8000
 
 let canvas=document.getElementById("simCanvas")
@@ -108,7 +102,6 @@ let history=[]
 let generation=1
 
 let playerStrategy=50
-
 let running=false
 
 let chart
@@ -120,8 +113,7 @@ updateChart()
 }
 
 document.getElementById("strategySlider").oninput=e=>{
-document.getElementById("strengthLabel").innerText=
-e.target.value+" Strength"
+document.getElementById("strengthLabel").innerText=e.target.value+" Strength"
 }
 
 class Cell{
@@ -132,10 +124,16 @@ this.x=x
 this.y=y
 
 this.strength=strength
-this.speed=(100-strength)/40
 
-this.radius=3+strength/20
+this.speed=Math.pow((100-strength)/100,1.5)*3
+
+this.radius=3+strength/18
+
 this.color=color
+
+this.hunger=0
+
+this.maxHunger=260+(100-strength)*1.5
 
 }
 
@@ -147,10 +145,8 @@ let dy=ty-this.y
 let d=Math.hypot(dx,dy)
 
 if(d>0){
-
 this.x+=dx/d*this.speed
 this.y+=dy/d*this.speed
-
 }
 
 this.x=Math.max(0,Math.min(WIDTH,this.x))
@@ -160,6 +156,8 @@ this.y=Math.max(0,Math.min(HEIGHT,this.y))
 
 update(){
 
+this.hunger++
+
 let target=null
 let best=Infinity
 
@@ -168,10 +166,8 @@ for(let f of foods){
 let d=Math.hypot(this.x-f.x,this.y-f.y)
 
 if(d<best){
-
 best=d
 target=f
-
 }
 
 }
@@ -198,12 +194,10 @@ players=[]
 for(let i=0;i<POP;i++){
 
 players.push(new Cell(
-
 Math.random()*WIDTH,
 Math.random()*HEIGHT,
 playerStrategy,
 "#3b82f6"
-
 ))
 
 }
@@ -217,12 +211,10 @@ computers=[]
 for(let i=0;i<POP;i++){
 
 computers.push(new Cell(
-
 Math.random()*WIDTH,
 Math.random()*HEIGHT,
 Math.random()*100,
 "#ef4444"
-
 ))
 
 }
@@ -235,15 +227,17 @@ computers=[]
 
 for(let i=0;i<POP;i++){
 
-let s=dist[Math.floor(Math.random()*dist.length)]
+let parent=dist[Math.floor(Math.random()*dist.length)]
+
+let s=parent+(Math.random()-0.5)*8
+
+s=Math.max(0,Math.min(100,s))
 
 computers.push(new Cell(
-
 Math.random()*WIDTH,
 Math.random()*HEIGHT,
 s,
 "#ef4444"
-
 ))
 
 }
@@ -271,6 +265,8 @@ if(Math.hypot(c.x-f.x,c.y-f.y)<c.radius+3){
 
 foods.splice(i,1)
 
+c.hunger=0
+
 }
 
 }
@@ -290,7 +286,9 @@ let c=computers[j]
 
 if(Math.hypot(p.x-c.x,p.y-c.y)<p.radius+c.radius){
 
-if(p.strength>c.strength){
+let prob=p.strength/(p.strength+c.strength)
+
+if(Math.random()<prob){
 
 computers.splice(j,1)
 
@@ -306,6 +304,13 @@ break
 }
 
 }
+
+}
+
+function starvation(){
+
+players=players.filter(c=>c.hunger<c.maxHunger)
+computers=computers.filter(c=>c.hunger<c.maxHunger)
 
 }
 
@@ -344,6 +349,7 @@ computers.forEach(c=>c.update())
 
 eatFood()
 fight()
+starvation()
 
 draw()
 
@@ -386,8 +392,8 @@ let ctxChart=document.getElementById("chart")
 
 if(chart) chart.destroy()
 
-const axisColor = "#e2e8f0"
-const gridColor = "rgba(148,163,184,0.25)"
+const axisColor="#e2e8f0"
+const gridColor="rgba(148,163,184,0.25)"
 
 if(chartMode==="bar"){
 
@@ -424,25 +430,12 @@ options:{
 animation:{duration:800},
 
 plugins:{
-legend:{
-labels:{color:axisColor,font:{size:14}}
-}
+legend:{labels:{color:axisColor,font:{size:14}}}
 },
 
 scales:{
-
-x:{
-ticks:{color:axisColor,font:{size:13}},
-grid:{color:gridColor}
-},
-
-y:{
-beginAtZero:true,
-max:POP,
-ticks:{color:axisColor,font:{size:13}},
-grid:{color:gridColor}
-}
-
+x:{ticks:{color:axisColor},grid:{color:gridColor}},
+y:{beginAtZero:true,max:POP,ticks:{color:axisColor},grid:{color:gridColor}}
 }
 
 }
@@ -456,15 +449,13 @@ chart=new Chart(ctxChart,{
 type:"line",
 
 data:{
-
 labels:history.map(h=>h.gen),
-
 datasets:[{
 
 label:"Average Computer Strength",
 
 data:history.map(h=>{
-if(h.dist.length===0) return 0
+if(h.dist.length===0)return 0
 return h.dist.reduce((a,b)=>a+b,0)/h.dist.length
 }),
 
@@ -485,23 +476,12 @@ options:{
 animation:{duration:900},
 
 plugins:{
-legend:{
-labels:{color:axisColor,font:{size:14}}
-}
+legend:{labels:{color:axisColor,font:{size:14}}}
 },
 
 scales:{
-
-x:{
-ticks:{color:axisColor,font:{size:13}},
-grid:{color:gridColor}
-},
-
-y:{
-ticks:{color:axisColor,font:{size:13}},
-grid:{color:gridColor}
-}
-
+x:{ticks:{color:axisColor},grid:{color:gridColor}},
+y:{ticks:{color:axisColor},grid:{color:gridColor}}
 }
 
 }
@@ -514,9 +494,7 @@ grid:{color:gridColor}
 
 document.getElementById("startBtn").onclick=()=>{
 
-playerStrategy=parseFloat(
-document.getElementById("strategySlider").value
-)
+playerStrategy=parseFloat(document.getElementById("strategySlider").value)
 
 generation=1
 history=[]
@@ -536,6 +514,5 @@ updateChart()
 }
 
 </script>
-
 </body>
 </html>
